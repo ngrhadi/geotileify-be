@@ -19,4 +19,8 @@ services:
     # extra_hosts:
     #   - "host.docker.internal:host-gateway"  # Untuk akses ke localhost dari container
     networks:
-      - adm_network
+      - administration_id_default
+
+networks:
+  administration_id_default:
+    external: true
