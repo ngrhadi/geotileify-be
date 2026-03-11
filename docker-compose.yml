@@ -6,7 +6,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: geotileify-be
     command: go run ./cmd/geotileify
     ports:
       - "9090:9090"
