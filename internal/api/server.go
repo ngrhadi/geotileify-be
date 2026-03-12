@@ -27,12 +27,38 @@ func (s *Server) Start() *echo.Echo {
     e := echo.New()
     e.Use(middleware.RequestLogger())
     e.Use(middleware.Recover())
+	config := middleware.RateLimiterConfig{
+        Skipper: middleware.DefaultSkipper,
+        Store: middleware.NewRateLimiterMemoryStoreWithConfig(
+            middleware.RateLimiterMemoryStoreConfig{
+                Rate:      10,              // 10 request per detik
+                Burst:     30,              // burst 30 request
+                ExpiresIn: 3 * time.Minute,
+            },
+        ),
+        IdentifierExtractor: func(c echo.Context) (string, error) {
+            return c.RealIP(), nil
+        },
+        ErrorHandler: func(c echo.Context, err error) error {
+            return c.JSON(429, map[string]string{
+                "error": "Too many requests",
+            })
+        },
+        DenyHandler: func(c echo.Context, identifier string, err error) error {
+            return c.JSON(429, map[string]string{
+                "error": "Rate limit exceeded. Please try again later.",
+            })
+        },
+    }
+
+    e.Use(middleware.RateLimiterWithConfig(config))
+
     e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
         AllowOrigins: []string{
             "chrome-extension://jjcjcgoahgihmebodlkbikbahcdgmjbb",
             "https://geotileify.idn-guessr.com",
-            // "http://localhost:3000",
-            // "http://localhost:5173",
+            "http://localhost:3000",
+            "http://localhost:5173",
         },
         AllowMethods: []string{
             http.MethodGet,
