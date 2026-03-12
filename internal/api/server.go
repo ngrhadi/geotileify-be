@@ -25,8 +25,21 @@ type Server struct {
 
 func (s *Server) Start() *echo.Echo {
     e := echo.New()
-    e.Use(middleware.RequestLogger())
     e.Use(middleware.Recover())
+
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+        AllowOrigins: []string{
+            "chrome-extension://jjcjcgoahgihmebodlkbikbahcdgmjbb", // ID Extension Anda
+            "https://geotileify.idn-guessr.com",
+            "http://localhost:3000",
+            "http://localhost:5173",
+        },
+        AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions},
+        AllowHeaders: []string{"Content-Type", "Authorization"},
+        AllowCredentials: true,
+    }))
+
+    e.Use(middleware.RequestLogger())
 	config := middleware.RateLimiterConfig{
         Skipper: middleware.DefaultSkipper,
         Store: middleware.NewRateLimiterMemoryStoreWithConfig(
@@ -52,32 +65,6 @@ func (s *Server) Start() *echo.Echo {
     }
 
     e.Use(middleware.RateLimiterWithConfig(config))
-
-    e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-        AllowOrigins: []string{
-            "chrome-extension://jjcjcgoahgihmebodlkbikbahcdgmjbb",
-            "https://geotileify.idn-guessr.com",
-            "http://localhost:3000",
-            "http://localhost:5173",
-        },
-        AllowMethods: []string{
-            http.MethodGet,
-            http.MethodPost,
-            http.MethodPut,
-            http.MethodDelete,
-            http.MethodOptions,
-        },
-        AllowHeaders: []string{
-            "Accept",
-            "Content-Type",
-            "Content-Length",
-            "Accept-Encoding",
-            "Authorization",
-            "X-CSRF-Token",
-        },
-        AllowCredentials: true,
-        MaxAge: 86400,
-    }))
 
 
     // Upload & generate endpoint
