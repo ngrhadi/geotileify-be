@@ -27,7 +27,32 @@ func (s *Server) Start() *echo.Echo {
     e := echo.New()
     e.Use(middleware.RequestLogger())
     e.Use(middleware.Recover())
-    e.Use(middleware.CORS())
+    e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+        AllowOrigins: []string{
+            "chrome-extension://jjcjcgoahgihmebodlkbikbahcdgmjbb",
+            "https://geotileify.idn-guessr.com",
+            // "http://localhost:3000",
+            // "http://localhost:5173",
+        },
+        AllowMethods: []string{
+            http.MethodGet,
+            http.MethodPost,
+            http.MethodPut,
+            http.MethodDelete,
+            http.MethodOptions,
+        },
+        AllowHeaders: []string{
+            "Accept",
+            "Content-Type",
+            "Content-Length",
+            "Accept-Encoding",
+            "Authorization",
+            "X-CSRF-Token",
+        },
+        AllowCredentials: true,
+        MaxAge: 86400,
+    }))
+
 
     // Upload & generate endpoint
     e.POST("/generate", func(c echo.Context) error {
