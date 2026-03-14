@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -297,6 +298,9 @@ func (s *Server) Start() *echo.Echo {
 		// STEP 9: Generate PMTiles
 		log.Println("STEP 9: Generating PMTiles...")
 		pmtilesPath := geojsonPath + ".pmtiles"
+		log.Printf("PATH: %s", os.Getenv("PATH"))
+		log.Printf("Tippecanoe location: %v", exec.Command("which", "tippecanoe").Run())
+		log.Printf("Tippecanoe version: %v", exec.Command("tippecanoe", "--version").Run())
 		if err := tile.GeneratePMTiles(geojsonPath, pmtilesPath); err != nil {
 			log.Printf("ERROR STEP 9 - PMTiles generation failed: %v", err)
 			return c.JSON(http.StatusInternalServerError, map[string]string{
