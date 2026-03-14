@@ -68,7 +68,7 @@ func (s *Server) Start() *echo.Echo {
 
     e.Use(middleware.RateLimiterWithConfig(config))
 
-	e.Use(middleware.BodyLimit("10M"))
+	e.Use(middleware.BodyLimit("50M"))
 
     // Upload & generate endpoint
     e.POST("/generate", func(c echo.Context) error {
