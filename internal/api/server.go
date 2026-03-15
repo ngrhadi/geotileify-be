@@ -29,17 +29,17 @@ func (s *Server) Start() *echo.Echo {
     e.Use(middleware.Recover())
 
 	e.Use(middleware.CORS())
-	// e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-    //     AllowOrigins: []string{
-    //         "chrome-extension://jjcjcgoahgihmebodlkbikbahcdgmjbb", // ID Extension Anda
-    //         "https://geotileify.idn-guessr.com",
-    //         "http://localhost:3000",
-    //         "http://localhost:5173",
-    //     },
-    //     AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions},
-    //     AllowHeaders: []string{"Content-Type", "Authorization"},
-    //     AllowCredentials: true,
-    // }))
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+        AllowOrigins: []string{
+            "chrome-extension://jjcjcgoahgihmebodlkbikbahcdgmjbb", // ID Extension Anda
+            "https://geotileify.idn-guessr.com",
+            // "http://localhost:3000",
+            // "http://localhost:5173",
+        },
+        AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions},
+        AllowHeaders: []string{"Content-Type", "Authorization"},
+        AllowCredentials: true,
+    }))
 
     e.Use(middleware.RequestLogger())
 
