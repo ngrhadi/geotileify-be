@@ -56,15 +56,18 @@ func (s *Server) Start() *echo.Echo {
 
     // 3. Daftarkan Task ke Scheduler setiap jam 19:00
     task, err := tasks.NewCleanupExpiredTilesTask()
-    if err != nil {
-        log.Fatalf("could not create task: %v", err)
-    }
+
+	if err != nil {
+		log.Fatalf("could not create task: %v", err)
+	}
 
     // Cron format: "0 19 * * *" artinya setiap hari jam 19:00 menit ke-0
     entryID, err := s.asynqScheduler.Register("*/15 * * * *", task)
-    if err != nil {
-        log.Fatalf("could not register scheduler: %v", err)
-    }
+    go func() {
+		if err != nil {
+			log.Fatalf("could not register scheduler: %v", err)
+		}
+	}()
     log.Printf("Registered cleanup task with entry ID: %s", entryID)
 
     // 4. Jalankan Scheduler dan Worker (Background Process)
@@ -88,9 +91,11 @@ func (s *Server) Start() *echo.Echo {
     }()
 
     // Jalankan Scheduler
-    if err := s.asynqScheduler.Run(); err != nil {
-        log.Fatalf("could not run scheduler: %v", err)
-    }
+	go func() {
+		if err := s.asynqScheduler.Run(); err != nil {
+			log.Fatalf("could not run scheduler: %v", err)
+		}
+	}()
 
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
         AllowOrigins: []string{
