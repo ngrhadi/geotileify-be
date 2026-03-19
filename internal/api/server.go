@@ -12,9 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hibiken/asynq"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/ngrhadi/geotileify-be/internal/storage"
+	"github.com/ngrhadi/geotileify-be/internal/tasks"
 	"github.com/ngrhadi/geotileify-be/internal/tile"
 	"github.com/ngrhadi/geotileify-be/utils"
 )
@@ -22,13 +24,74 @@ import (
 type Server struct {
     DB *sql.DB
     MinioClient *storage.Client
+	asynqClient *asynq.Client
+    asynqScheduler *asynq.Scheduler
 }
 
 func (s *Server) Start() *echo.Echo {
     e := echo.New()
     e.Use(middleware.Recover())
 
-	e.Use(middleware.CORS())
+	redisAddr := os.Getenv("REDIS_URL")
+    if strings.HasPrefix(redisAddr, "redis://") {
+        redisAddr = strings.TrimPrefix(redisAddr, "redis://")
+    }
+
+	// 2. Inisialisasi Asynq Client
+    s.asynqClient = asynq.NewClient(asynq.RedisClientOpt{Addr: redisAddr})
+    // Jangan defer close di sini jika server berjalan terus, taruh di logic shutdown
+
+    // 3. [PENTING] Inisialisasi Asynq Scheduler
+    // Error terjadi karena baris ini sebelumnya tidak ada, sehingga s.asynqScheduler adalah nil
+    s.asynqScheduler = asynq.NewScheduler(
+        asynq.RedisClientOpt{Addr: redisAddr},
+        nil,
+    )
+
+	// Inisialisasi Handler dengan dependency DB dan Minio
+    cleanupHandler := &tasks.CleanupTaskHandler{
+        DB:          s.DB,
+        MinioClient: s.MinioClient,
+    }
+
+    // 3. Daftarkan Task ke Scheduler setiap jam 19:00
+    task, err := tasks.NewCleanupExpiredTilesTask()
+    if err != nil {
+        log.Fatalf("could not create task: %v", err)
+    }
+
+    // Cron format: "0 19 * * *" artinya setiap hari jam 19:00 menit ke-0
+    entryID, err := s.asynqScheduler.Register("*/15 * * * *", task)
+    if err != nil {
+        log.Fatalf("could not register scheduler: %v", err)
+    }
+    log.Printf("Registered cleanup task with entry ID: %s", entryID)
+
+    // 4. Jalankan Scheduler dan Worker (Background Process)
+    // Scheduler membutuhkan Worker (asynq.Server) untuk menjalankan tasknya
+    go func() {
+        // Inisialisasi Mux untuk handler
+        mux := asynq.NewServeMux()
+        // Daftarkan handler ke mux
+        mux.HandleFunc(tasks.TypeCleanupExpiredTiles, cleanupHandler.ProcessTask)
+
+        // Inisialisasi Worker Server (jika belum ada di struct Server)
+        worker := asynq.NewServer(
+            asynq.RedisClientOpt{Addr: redisAddr},
+            asynq.Config{Concurrency: 10},
+        )
+
+        // Jalankan Worker
+        if err := worker.Run(mux); err != nil {
+            log.Fatalf("could not run worker: %v", err)
+        }
+    }()
+
+    // Jalankan Scheduler
+    if err := s.asynqScheduler.Run(); err != nil {
+        log.Fatalf("could not run scheduler: %v", err)
+    }
+
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
         AllowOrigins: []string{
             "chrome-extension://jjcjcgoahgihmebodlkbikbahcdgmjbb", // ID Extension Anda
