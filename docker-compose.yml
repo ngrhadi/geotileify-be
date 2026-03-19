@@ -34,8 +34,11 @@ services:
     networks:
       - geotileify
       - administration_id_default
+      - administration_id_adm_network
 
 networks:
   geotileify:
   administration_id_default:  # DEFINE NETWORK EXTERNAL
+    external: true
+  administration_id_adm_network:  # DEFINE NETWORK EXTERNAL
     external: true
