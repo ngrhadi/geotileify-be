@@ -99,7 +99,8 @@ func (s *Server) Start() *echo.Echo {
 
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
         AllowOrigins: []string{
-            "chrome-extension://jjcjcgoahgihmebodlkbikbahcdgmjbb", // ID Extension Anda
+            "chrome-extension://ljoijfpcddgiadohecobajkkbbemmaio",
+            "chrome-extension://jjcjcgoahgihmebodlkbikbahcdgmjbb",
             "https://geotileify.idn-guessr.com",
             // "http://localhost:3000",
             // "http://localhost:5173",
