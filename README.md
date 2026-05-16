@@ -1,3 +1,13 @@
+# Geotileify
+
+A Go REST API that accepts geospatial file uploads, converts them to [PMTiles](https://protomaps.com/docs/pmtiles) format, stores them in MinIO, and auto-expires them after 24 hours.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+→ [Contributing Guide](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
+
+---
+
 ## Commands
 
 ```bash
