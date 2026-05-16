@@ -12,39 +12,36 @@ import (
 )
 
 func main() {
-    godotenv.Load() // Load .env
+	godotenv.Load()
 
-    db, err := sql.Open("postgres", os.Getenv("DB_URL"))
-
-    if err != nil {
-        log.Fatal(err)
-    }
-
+	db, err := sql.Open("postgres", os.Getenv("DB_URL"))
+	if err != nil {
+		log.Fatal(err)
+	}
 	if err := db.Ping(); err != nil {
 		log.Fatal("db connection failed:", err)
 	}
+	log.Println("DB connected")
 
-	log.Println("DB connected successfully")
+	minioClient := storage.New(
+		os.Getenv("MINIO_ENDPOINT"),
+		os.Getenv("MINIO_ACCESS_KEY"),
+		os.Getenv("MINIO_SECRET_KEY"),
+		os.Getenv("MINIO_BUCKET"),
+		true,
+	)
 
-    minioClient := storage.New(
-        os.Getenv("MINIO_ENDPOINT"),
-        os.Getenv("MINIO_ACCESS_KEY"),
-        os.Getenv("MINIO_SECRET_KEY"),
-        os.Getenv("MINIO_BUCKET"),
-        true,
-    )
-
-    s := &api.Server{
-        DB: db,
-        MinioClient: minioClient,
-    }
+	s := &api.Server{
+		DB:          db,
+		MinioClient: minioClient,
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	log.Println("Starting server on :" + port)
+	log.Println("starting server on :" + port)
 	e := s.Start()
 	e.Logger.Fatal(e.Start(":" + port))
 }

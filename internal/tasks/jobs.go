@@ -3,73 +3,58 @@ package tasks
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 
 	"github.com/hibiken/asynq"
 	"github.com/ngrhadi/geotileify-be/internal/storage"
 )
 
-const (
-    // TypeCleanupExpiredTiles adalah nama unik untuk task ini
-    TypeCleanupExpiredTiles = "tiles:cleanup_expired"
-)
+const TypeCleanupExpiredTiles = "tiles:cleanup_expired"
 
-// CleanupTaskHandler menyimpan dependency yang dibutuhkan untuk task pembersihan
+// CleanupTaskHandler deletes expired tiles from MinIO storage and the database.
 type CleanupTaskHandler struct {
-    DB          *sql.DB
-    MinioClient *storage.Client
+	DB          *sql.DB
+	MinioClient *storage.Client
 }
 
-// NewCleanupExpiredTilesTask membuat task baru untuk dikirim ke antrian
-func NewCleanupExpiredTilesTask() (*asynq.Task, error) {
-    // Task ini tidak membutuhkan payload (data kosong), karena akan scan DB
-    return asynq.NewTask(TypeCleanupExpiredTiles, nil), nil
+// NewCleanupExpiredTilesTask creates the task payload for the Asynq scheduler.
+// No payload is needed because the handler queries the database directly.
+func NewCleanupExpiredTilesTask() *asynq.Task {
+	return asynq.NewTask(TypeCleanupExpiredTiles, nil)
 }
 
-// ProcessTask adalah logika yang dijalankan worker saat task dieksekusi
+// ProcessTask scans for expired tile records, deletes the associated files from MinIO,
+// then removes the database entries. Errors on individual records are logged and skipped
+// so one failure does not abort the entire cleanup run.
 func (h *CleanupTaskHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
-    log.Println("INFO: Memulai job pembersihan file expired...")
+	rows, err := h.DB.QueryContext(ctx, "SELECT public_id, file_path FROM tiles WHERE expires_at < NOW()")
+	if err != nil {
+		return fmt.Errorf("cleanup: query expired tiles: %w", err)
+	}
+	defer rows.Close()
 
-    // 1. Query data yang sudah expired
-    // Kita ambil public_id dan file_path untuk proses cleanup
-    rows, err := h.DB.Query("SELECT public_id, file_path FROM tiles WHERE expires_at < NOW()")
-    if err != nil {
-        log.Printf("ERROR: Gagal query database: %v", err)
-        return err
-    }
-    defer rows.Close()
+	var count int
+	for rows.Next() {
+		var publicID, filePath string
+		if err := rows.Scan(&publicID, &filePath); err != nil {
+			log.Printf("cleanup: scan row: %v", err)
+			continue
+		}
 
-    var count int
+		if err := h.MinioClient.Delete(ctx, filePath); err != nil {
+			log.Printf("cleanup: delete %s from storage: %v", filePath, err)
+			continue
+		}
 
-    for rows.Next() {
-        var publicID string
-        var filePath string
+		if _, err := h.DB.ExecContext(ctx, "DELETE FROM tiles WHERE public_id = $1", publicID); err != nil {
+			log.Printf("cleanup: delete %s from db: %v", publicID, err)
+			continue
+		}
 
-        if err := rows.Scan(&publicID, &filePath); err != nil {
-            log.Printf("ERROR: Gagal scan row: %v", err)
-            continue
-        }
+		count++
+	}
 
-        // 2. Hapus file dari Minio Storage
-        // Menggunakan filePath (objectName) yang didapat dari DB
-        if err := h.MinioClient.Delete(ctx, filePath); err != nil {
-            log.Printf("ERROR: Gagal hapus file %s dari Minio: %v", filePath, err)
-            // Lanjutkan ke record berikutnya meskipun gagal hapus file, atau bisa return error sesuai kebutuhan
-            continue
-        }
-
-        // 3. Hapus record dari Database
-        // Setelah file fisik dihapus, hapus juga metadata di DB
-        _, err := h.DB.Exec("DELETE FROM tiles WHERE public_id = $1", publicID)
-        if err != nil {
-            log.Printf("ERROR: Gagal hapus record DB %s: %v", publicID, err)
-            continue
-        }
-
-        log.Printf("SUCCESS: Berhasil membersihkan tile ID: %s", publicID)
-        count++
-    }
-
-    log.Printf("INFO: Job pembersihan selesai. Total %d file dihapus.", count)
-    return nil
+	log.Printf("cleanup: removed %d expired tile(s)", count)
+	return nil
 }

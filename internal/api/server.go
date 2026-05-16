@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -21,499 +20,294 @@ import (
 	"github.com/ngrhadi/geotileify-be/utils"
 )
 
+// Server holds the shared dependencies injected at startup.
 type Server struct {
-    DB *sql.DB
-    MinioClient *storage.Client
-	asynqClient *asynq.Client
-    asynqScheduler *asynq.Scheduler
+	DB             *sql.DB
+	MinioClient    *storage.Client
+	asynqClient    *asynq.Client
+	asynqScheduler *asynq.Scheduler
 }
 
+// Start registers middleware and routes, starts background workers,
+// and returns the configured Echo instance ready to serve.
 func (s *Server) Start() *echo.Echo {
-    e := echo.New()
-    e.Use(middleware.Recover())
+	e := echo.New()
+	e.Use(middleware.Recover())
 
-	redisAddr := os.Getenv("REDIS_URL")
-    if strings.HasPrefix(redisAddr, "redis://") {
-        redisAddr = strings.TrimPrefix(redisAddr, "redis://")
-    }
+	s.startBackgroundWorkers()
+	s.registerMiddleware(e)
+	s.registerRoutes(e)
 
-	// 2. Inisialisasi Asynq Client
-    s.asynqClient = asynq.NewClient(asynq.RedisClientOpt{Addr: redisAddr})
-    // Jangan defer close di sini jika server berjalan terus, taruh di logic shutdown
+	return e
+}
 
-    // 3. [PENTING] Inisialisasi Asynq Scheduler
-    // Error terjadi karena baris ini sebelumnya tidak ada, sehingga s.asynqScheduler adalah nil
-    s.asynqScheduler = asynq.NewScheduler(
-        asynq.RedisClientOpt{Addr: redisAddr},
-        nil,
-    )
+// startBackgroundWorkers initialises the Asynq scheduler and worker pool.
+// The cleanup job runs every 15 minutes to remove expired tiles.
+func (s *Server) startBackgroundWorkers() {
+	redisAddr := strings.TrimPrefix(os.Getenv("REDIS_URL"), "redis://")
 
-	// Inisialisasi Handler dengan dependency DB dan Minio
-    cleanupHandler := &tasks.CleanupTaskHandler{
-        DB:          s.DB,
-        MinioClient: s.MinioClient,
-    }
+	s.asynqClient = asynq.NewClient(asynq.RedisClientOpt{Addr: redisAddr})
+	s.asynqScheduler = asynq.NewScheduler(asynq.RedisClientOpt{Addr: redisAddr}, nil)
 
-    // 3. Daftarkan Task ke Scheduler setiap jam 19:00
-    task, err := tasks.NewCleanupExpiredTilesTask()
-
-	if err != nil {
-		log.Fatalf("could not create task: %v", err)
+	cleanupHandler := &tasks.CleanupTaskHandler{
+		DB:          s.DB,
+		MinioClient: s.MinioClient,
 	}
 
-    // Cron format: "0 19 * * *" artinya setiap hari jam 19:00 menit ke-0
-    entryID, err := s.asynqScheduler.Register("*/15 * * * *", task)
-    go func() {
-		if err != nil {
-			log.Fatalf("could not register scheduler: %v", err)
+	task := tasks.NewCleanupExpiredTilesTask()
+	entryID, err := s.asynqScheduler.Register("*/15 * * * *", task)
+	if err != nil {
+		log.Fatalf("could not register cleanup scheduler: %v", err)
+	}
+	log.Printf("cleanup task scheduled (entry: %s)", entryID)
+
+	go func() {
+		mux := asynq.NewServeMux()
+		mux.HandleFunc(tasks.TypeCleanupExpiredTiles, cleanupHandler.ProcessTask)
+		worker := asynq.NewServer(
+			asynq.RedisClientOpt{Addr: redisAddr},
+			asynq.Config{Concurrency: 10},
+		)
+		if err := worker.Run(mux); err != nil {
+			log.Fatalf("asynq worker stopped: %v", err)
 		}
 	}()
-    log.Printf("Registered cleanup task with entry ID: %s", entryID)
 
-    // 4. Jalankan Scheduler dan Worker (Background Process)
-    // Scheduler membutuhkan Worker (asynq.Server) untuk menjalankan tasknya
-    go func() {
-        // Inisialisasi Mux untuk handler
-        mux := asynq.NewServeMux()
-        // Daftarkan handler ke mux
-        mux.HandleFunc(tasks.TypeCleanupExpiredTiles, cleanupHandler.ProcessTask)
-
-        // Inisialisasi Worker Server (jika belum ada di struct Server)
-        worker := asynq.NewServer(
-            asynq.RedisClientOpt{Addr: redisAddr},
-            asynq.Config{Concurrency: 10},
-        )
-
-        // Jalankan Worker
-        if err := worker.Run(mux); err != nil {
-            log.Fatalf("could not run worker: %v", err)
-        }
-    }()
-
-    // Jalankan Scheduler
 	go func() {
 		if err := s.asynqScheduler.Run(); err != nil {
-			log.Fatalf("could not run scheduler: %v", err)
+			log.Fatalf("asynq scheduler stopped: %v", err)
 		}
 	}()
-
-	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-        AllowOrigins: []string{
-            "chrome-extension://ljoijfpcddgiadohecobajkkbbemmaio",
-            "chrome-extension://jjcjcgoahgihmebodlkbikbahcdgmjbb",
-            "https://geotileify.idn-guessr.com",
-            // "http://localhost:3000",
-            // "http://localhost:5173",
-        },
-        AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions},
-        AllowHeaders: []string{"Content-Type", "Authorization"},
-        AllowCredentials: true,
-    }))
-
-    e.Use(middleware.RequestLogger())
-
-	config := middleware.RateLimiterConfig{
-        Skipper: middleware.DefaultSkipper,
-        Store: middleware.NewRateLimiterMemoryStoreWithConfig(
-            middleware.RateLimiterMemoryStoreConfig{
-                Rate:      10,              // 10 request per detik
-                Burst:     30,              // burst 30 request
-                ExpiresIn: 3 * time.Minute,
-            },
-        ),
-        IdentifierExtractor: func(c echo.Context) (string, error) {
-            return c.RealIP(), nil
-        },
-        ErrorHandler: func(c echo.Context, err error) error {
-            return c.JSON(429, map[string]string{
-                "error": "Too many requests",
-            })
-        },
-        DenyHandler: func(c echo.Context, identifier string, err error) error {
-            return c.JSON(429, map[string]string{
-                "error": "Rate limit exceeded. Please try again later.",
-            })
-        },
-    }
-
-    e.Use(middleware.RateLimiterWithConfig(config))
-
-	e.Use(middleware.BodyLimit("50M"))
-
-    // Upload & generate endpoint
-    // e.POST("/generate", func(c echo.Context) error {
-    //     ctx := c.Request().Context()
-
-    //     // cek bucket
-    //     exists, err := s.MinioClient.BucketExists(ctx)
-    //     if err != nil || !exists {
-    //         return c.JSON(http.StatusInternalServerError, map[string]string{
-    //             "error": "bucket not found",
-    //         })
-    //     }
-
-    //     // Ambil file dari form-data
-    //     file, err := c.FormFile("file")
-    //     if err != nil {
-    //         return c.JSON(http.StatusBadRequest, map[string]string{"error": "file not provided"})
-    //     }
-
-    //     // Batasi maksimal 10MB
-    //     if file.Size > 10*1024*1024 {
-    //         return c.JSON(http.StatusBadRequest, map[string]string{"error": "file size exceeds 10MB"})
-    //     }
-
-	// 	ext := strings.ToLower(filepath.Ext(file.Filename))
-
-	// 	allowed := map[string]bool{
-	// 		".geojson": true,
-	// 		".json":    true,
-	// 		".parquet": true,
-	// 	}
-
-	// 	if !allowed[ext] {
-	// 		return c.JSON(http.StatusBadRequest, map[string]string{
-	// 			"error": "unsupported file type",
-	// 		})
-	// 	}
-
-    //     src, err := file.Open()
-    //     if err != nil {
-    //         return err
-    //     }
-    //     defer src.Close()
-
-    //     // Simpan sementara
-    //     tmpDir := "./tmp"
-    //     os.MkdirAll(tmpDir, 0755)
-
-	// 	tmpPath := filepath.Join(tmpDir, file.Filename)
-	// 	outFile, err := os.Create(tmpPath)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	defer outFile.Close()
-
-	// 	if _, err := io.Copy(outFile, src); err != nil {
-	// 		return err
-	// 	}
-
-	// 	// convert parquet → geojson if needed
-	// 	geojsonPath := tmpPath
-
-	// 	if ext == ".parquet" {
-	// 		geojsonPath = tmpPath + ".geojson"
-	// 		if err := tile.ConvertParquetToGeoJSON(tmpPath, geojsonPath); err != nil {
-	// 			return c.JSON(http.StatusInternalServerError, map[string]string{
-	// 				"error": "failed to convert parquet to geojson",
-	// 			})
-	// 		}
-	// 	}
-
-	// 	pmtilesPath := geojsonPath + ".pmtiles"
-	// 	if err := tile.GeneratePMTiles(geojsonPath, pmtilesPath); err != nil {
-	// 		return c.JSON(http.StatusInternalServerError, map[string]string{
-	// 			"error": "failed to generate pmtiles",
-	// 		})
-	// 	}
-
-	// 	// upload ke MinIO
-	// 	f, err := os.Open(pmtilesPath)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	defer f.Close()
-
-    //     fi, _ := f.Stat()
-    //     objectName := "geojson/" + file.Filename + ".pmtiles" // folder "geojson/"
-    //     if err := s.MinioClient.Upload(ctx, objectName, f, fi.Size(), "application/octet-stream"); err != nil {
-    //         return err
-    //     }
-
-    //     url := fmt.Sprintf("https://%s/%s/%s", s.MinioClient.Endpoint, s.MinioClient.Bucket, objectName)
-
-    //     // Simpan metadata ke DB
-    //     publicId := utils.NewULID()
-    //     expiresAt := time.Now().Add(24 * time.Hour)
-    //     _, err = s.DB.Exec(
-    //         `INSERT INTO tiles(public_id, file_path, url, generated_at, expires_at)
-    //         VALUES ($1, $2, $3, NOW(), $4)`,
-    //         publicId,
-    //         objectName,
-    //         url,
-    //         expiresAt,
-    //     )
-    //     if err != nil {
-    //         return err
-    //     }
-
-    //     // Hapus file sementara
-    //     os.Remove(tmpPath)
-	// 	if geojsonPath != tmpPath {
-	// 		os.Remove(geojsonPath)
-	// 	}
-    //     os.Remove(pmtilesPath)
-
-    //     return c.JSON(http.StatusOK, map[string]any{
-    //         "id": publicId,
-    //         "download_url": fmt.Sprintf("%s/download/%s", os.Getenv("PUBLIC_BASE_URL"), publicId),
-    //         "expires_at": expiresAt,
-    //     })
-    // })
-
-	e.POST("/generate", func(c echo.Context) error {
-		ctx := c.Request().Context()
-		log.Println("=== START UPLOAD PROCESS ===")
-
-		// STEP 1: Cek bucket
-		log.Println("STEP 1: Checking bucket...")
-		exists, err := s.MinioClient.BucketExists(ctx)
-		if err != nil {
-			log.Printf("ERROR STEP 1 - Bucket check failed: %v", err)
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "bucket check failed: " + err.Error(),
-			})
-		}
-		if !exists {
-			log.Println("ERROR STEP 1 - Bucket not found")
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "bucket not found",
-			})
-		}
-		log.Println("STEP 1: Bucket OK")
-
-		// STEP 2: Ambil file
-		log.Println("STEP 2: Getting file from form...")
-		file, err := c.FormFile("file")
-		if err != nil {
-			log.Printf("ERROR STEP 2 - File not provided: %v", err)
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "file not provided"})
-		}
-		log.Printf("STEP 2: File received: %s, size: %d bytes", file.Filename, file.Size)
-
-		// STEP 3: Cek ukuran file
-		log.Println("STEP 3: Checking file size...")
-		if file.Size > 10*1024*1024 {
-			log.Printf("ERROR STEP 3 - File too big: %d bytes", file.Size)
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "file size exceeds 10MB"})
-		}
-		log.Println("STEP 3: File size OK")
-
-		// STEP 4: Cek ekstensi
-		log.Println("STEP 4: Checking file extension...")
-		ext := strings.ToLower(filepath.Ext(file.Filename))
-		allowed := map[string]bool{
-			".geojson": true,
-			".json":    true,
-			".parquet": true,
-		}
-		if !allowed[ext] {
-			log.Printf("ERROR STEP 4 - Unsupported extension: %s", ext)
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "unsupported file type",
-			})
-		}
-		log.Printf("STEP 4: Extension OK: %s", ext)
-
-		// STEP 5: Buka file
-		log.Println("STEP 5: Opening file...")
-		src, err := file.Open()
-		if err != nil {
-			log.Printf("ERROR STEP 5 - Cannot open file: %v", err)
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		}
-		defer src.Close()
-		log.Println("STEP 5: File opened successfully")
-
-		// STEP 6: Buat temp directory
-		log.Println("STEP 6: Creating temp directory...")
-		tmpDir := "./tmp"
-		if err := os.MkdirAll(tmpDir, 0755); err != nil {
-			log.Printf("ERROR STEP 6 - Cannot create temp dir: %v", err)
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		}
-		log.Printf("STEP 6: Temp dir ready: %s", tmpDir)
-
-		// STEP 7: Simpan file sementara
-		log.Println("STEP 7: Saving temporary file...")
-		tmpPath := filepath.Join(tmpDir, file.Filename)
-		outFile, err := os.Create(tmpPath)
-		if err != nil {
-			log.Printf("ERROR STEP 7 - Cannot create temp file: %v", err)
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		}
-		defer outFile.Close()
-
-		if _, err := io.Copy(outFile, src); err != nil {
-			log.Printf("ERROR STEP 7 - Cannot copy to temp file: %v", err)
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		}
-		log.Printf("STEP 7: Temp file saved: %s", tmpPath)
-
-		// STEP 8: Convert parquet if needed
-		geojsonPath := tmpPath
-		if ext == ".parquet" {
-			log.Println("STEP 8: Converting Parquet to GeoJSON...")
-			geojsonPath = tmpPath + ".geojson"
-			if err := tile.ConvertParquetToGeoJSON(tmpPath, geojsonPath); err != nil {
-				log.Printf("ERROR STEP 8 - Parquet conversion failed: %v", err)
-				return c.JSON(http.StatusInternalServerError, map[string]string{
-					"error": "failed to convert parquet to geojson: " + err.Error(),
-				})
-			}
-			log.Println("STEP 8: Parquet conversion successful")
-		}
-
-		// STEP 9: Generate PMTiles
-		log.Println("STEP 9: Generating PMTiles...")
-		pmtilesPath := geojsonPath + ".pmtiles"
-		log.Printf("PATH: %s", os.Getenv("PATH"))
-		log.Printf("Tippecanoe location: %v", exec.Command("which", "tippecanoe").Run())
-		log.Printf("Tippecanoe version: %v", exec.Command("tippecanoe", "--version").Run())
-		if err := tile.GeneratePMTiles(geojsonPath, pmtilesPath); err != nil {
-			log.Printf("ERROR STEP 9 - PMTiles generation failed: %v", err)
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "failed to generate pmtiles: " + err.Error(),
-			})
-		}
-		log.Printf("STEP 9: PMTiles generated: %s", pmtilesPath)
-
-		// STEP 10: Upload ke MinIO
-		log.Println("STEP 10: Opening PMTiles for upload...")
-		f, err := os.Open(pmtilesPath)
-		if err != nil {
-			log.Printf("ERROR STEP 10 - Cannot open PMTiles: %v", err)
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		}
-		defer f.Close()
-
-		fi, err := f.Stat()
-		if err != nil {
-			log.Printf("ERROR STEP 10 - Cannot stat PMTiles: %v", err)
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		}
-		log.Printf("STEP 10: PMTiles size: %d bytes", fi.Size())
-
-		objectName := "geojson/" + file.Filename + ".pmtiles"
-		log.Printf("STEP 10: Uploading to MinIO: %s", objectName)
-
-		if err := s.MinioClient.Upload(ctx, objectName, f, fi.Size(), "application/octet-stream"); err != nil {
-			log.Printf("ERROR STEP 10 - MinIO upload failed: %v", err)
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "upload failed: " + err.Error(),
-			})
-		}
-		log.Println("STEP 10: MinIO upload successful")
-
-		// STEP 11: Simpan ke database
-		log.Println("STEP 11: Saving to database...")
-		publicId := utils.NewULID()
-		expiresAt := time.Now().Add(24 * time.Hour)
-		url := fmt.Sprintf("https://%s/%s/%s", s.MinioClient.Endpoint, s.MinioClient.Bucket, objectName)
-
-		_, err = s.DB.Exec(
-			`INSERT INTO tiles(public_id, file_path, url, generated_at, expires_at)
-			VALUES ($1, $2, $3, NOW(), $4)`,
-			publicId,
-			objectName,
-			url,
-			expiresAt,
-		)
-		if err != nil {
-			log.Printf("ERROR STEP 11 - Database insert failed: %v", err)
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "database error: " + err.Error(),
-			})
-		}
-		log.Printf("STEP 11: Database record created: %s", publicId)
-
-		// STEP 12: Cleanup
-		log.Println("STEP 12: Cleaning up temporary files...")
-		os.Remove(tmpPath)
-		if geojsonPath != tmpPath {
-			os.Remove(geojsonPath)
-		}
-		os.Remove(pmtilesPath)
-		log.Println("STEP 12: Cleanup complete")
-
-		log.Println("=== UPLOAD PROCESS COMPLETED SUCCESSFULLY ===")
-		return c.JSON(http.StatusOK, map[string]any{
-			"id": publicId,
-			"download_url": fmt.Sprintf("%s/download/%s", os.Getenv("PUBLIC_BASE_URL"), publicId),
-			"expires_at": expiresAt,
-		})
-	})
-
-	e.GET("/download/:id", func(c echo.Context) error {
-		id := c.Param("id")
-		var objectName, url string
-		var expiresAt time.Time
-
-		// Ambil metadata dari DB
-		err := s.DB.QueryRow(
-			"SELECT file_path, url, expires_at FROM tiles WHERE public_id=$1",
-			id,
-		).Scan(&objectName, &url, &expiresAt)
-		if err != nil {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "tile not found"})
-		}
-
-		if time.Now().After(expiresAt) {
-			// Hapus file dari bucket
-			err := s.MinioClient.Delete(c.Request().Context(), objectName)
-			if err != nil {
-				log.Println("failed to delete expired object:", err)
-			}
-			return c.JSON(http.StatusForbidden, map[string]string{"error": "link expired"})
-		}
-
-		// Gunakan context dari request, jangan ctx global
-		presignedURL, err := s.MinioClient.PresignDownload(c.Request().Context(), objectName, 5*time.Minute)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": fmt.Sprintf("failed to generate download link: %v", err),
-			})
-		}
-
-		// Redirect ke presigned URL
-		return c.Redirect(http.StatusFound, presignedURL)
-	})
-
-	e.GET("/tiles/:id", func(c echo.Context) error {
-		id := c.Param("id")
-
-		// Ambil metadata dari DB
-		var objectName string
-		var expiresAt time.Time
-
-		err := s.DB.QueryRow(
-			"SELECT file_path, expires_at FROM tiles WHERE public_id=$1",
-			id,
-		).Scan(&objectName, &expiresAt)
-		if err != nil {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "tile not found"})
-		}
-
-		// Cek expired
-		if time.Now().After(expiresAt) {
-			return c.JSON(http.StatusForbidden, map[string]string{"error": "link expired"})
-		}
-
-		// Gunakan MinIO client untuk mendapatkan object dengan range request
-		// Buat presigned URL untuk GET dengan durasi pendek
-		presignedURL, err := s.MinioClient.PresignGetObject(c.Request().Context(), objectName, 5*time.Minute)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": fmt.Sprintf("failed to generate access link: %v", err),
-			})
-		}
-
-		// Proxy request ke MinIO dengan range header yang sama
-		// atau redirect dengan status 302
-		return c.Redirect(http.StatusFound, presignedURL)
-	})
-
-
-    return e
 }
 
+func (s *Server) registerMiddleware(e *echo.Echo) {
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{
+			"chrome-extension://ljoijfpcddgiadohecobajkkbbemmaio",
+			"chrome-extension://jjcjcgoahgihmebodlkbikbahcdgmjbb",
+			"https://geotileify.idn-guessr.com",
+		},
+		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodOptions},
+		AllowHeaders:     []string{"Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}))
+
+	e.Use(middleware.RequestLogger())
+
+	e.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Skipper: middleware.DefaultSkipper,
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(
+			middleware.RateLimiterMemoryStoreConfig{
+				Rate:      10,
+				Burst:     30,
+				ExpiresIn: 3 * time.Minute,
+			},
+		),
+		IdentifierExtractor: func(c echo.Context) (string, error) {
+			return c.RealIP(), nil
+		},
+		ErrorHandler: func(c echo.Context, err error) error {
+			return c.JSON(http.StatusTooManyRequests, map[string]string{"error": "Too many requests"})
+		},
+		DenyHandler: func(c echo.Context, identifier string, err error) error {
+			return c.JSON(http.StatusTooManyRequests, map[string]string{"error": "Rate limit exceeded. Please try again later."})
+		},
+	}))
+
+	e.Use(middleware.BodyLimit("50M"))
+}
+
+func (s *Server) registerRoutes(e *echo.Echo) {
+	e.GET("/", func(c echo.Context) error {
+		return c.Redirect(http.StatusFound, "/health")
+	})
+	e.GET("/health", s.handleHealth)
+	e.POST("/generate", s.handleGenerate)
+	e.GET("/download/:id", s.handleDownload)
+	e.GET("/tiles/:id", s.handleStreamTile)
+}
+
+// handleHealth returns the current service status and uptime information.
+func (s *Server) handleHealth(c echo.Context) error {
+	return c.JSON(http.StatusOK, map[string]string{
+		"status":  "ok",
+		"service": "geotileify",
+		"message": "Service is running",
+	})
+}
+
+// handleGenerate accepts a GeoJSON, JSON, or Parquet file upload, converts it to PMTiles
+// using tippecanoe, stores the result in MinIO, and records metadata with a 24-hour TTL.
+func (s *Server) handleGenerate(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	exists, err := s.MinioClient.BucketExists(ctx)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "bucket check failed: " + err.Error()})
+	}
+	if !exists {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "storage bucket not found"})
+	}
+
+	file, err := c.FormFile("file")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "file not provided"})
+	}
+
+	if file.Size > 50*1024*1024 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "file size exceeds 50MB"})
+	}
+
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	allowed := map[string]bool{
+		".geojson":  true, // GeoJSON
+		".json":     true, // GeoJSON (alternate extension)
+		".geojsons": true, // GeoJSON Sequences — RFC 8142
+		".geojsonl": true, // GeoJSON Lines — common in GDAL/Tippecanoe
+		".fgb":      true, // FlatGeobuf
+		".parquet":  true, // GeoParquet — converted via DuckDB
+		".zip":      true, // Shapefile bundle (.shp + .dbf + .shx)
+	}
+	if !allowed[ext] {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "unsupported file type"})
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	defer src.Close()
+
+	tmpPath := filepath.Join(os.TempDir(), file.Filename)
+	outFile, err := os.Create(tmpPath)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	if _, err := io.Copy(outFile, src); err != nil {
+		outFile.Close()
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	// Close explicitly so the external tippecanoe process can read the file.
+	outFile.Close()
+
+	geojsonPath := tmpPath
+	switch ext {
+	case ".zip":
+		geojsonPath = tmpPath + ".geojson"
+		if err := tile.ConvertShapefileZipToGeoJSON(tmpPath, geojsonPath); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "shapefile conversion failed: " + err.Error()})
+		}
+	case ".parquet":
+		geojsonPath = tmpPath + ".geojson"
+		if err := tile.ConvertParquetToGeoJSON(tmpPath, geojsonPath); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "parquet conversion failed: " + err.Error()})
+		}
+	}
+
+	pmtilesPath := geojsonPath + ".pmtiles"
+	if err := tile.GeneratePMTiles(geojsonPath, pmtilesPath); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tile generation failed: " + err.Error()})
+	}
+
+	f, err := os.Open(pmtilesPath)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	objectName := "geojson/" + file.Filename + ".pmtiles"
+	if err := s.MinioClient.Upload(ctx, objectName, f, fi.Size(), "application/octet-stream"); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "upload failed: " + err.Error()})
+	}
+
+	publicID := utils.NewULID()
+	expiresAt := time.Now().Add(24 * time.Hour)
+	tileURL := fmt.Sprintf("https://%s/%s/%s", s.MinioClient.Endpoint, s.MinioClient.Bucket, objectName)
+
+	_, err = s.DB.Exec(
+		`INSERT INTO tiles (public_id, file_path, url, generated_at, expires_at) VALUES ($1, $2, $3, NOW(), $4)`,
+		publicID, objectName, tileURL, expiresAt,
+	)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "database error: " + err.Error()})
+	}
+
+	// Best-effort cleanup of temporary files.
+	os.Remove(tmpPath)
+	if geojsonPath != tmpPath {
+		os.Remove(geojsonPath)
+	}
+	os.Remove(pmtilesPath)
+
+	log.Printf("tile generated: %s (expires: %s)", publicID, expiresAt.Format(time.RFC3339))
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"id":           publicID,
+		"download_url": fmt.Sprintf("%s/download/%s", os.Getenv("PUBLIC_BASE_URL"), publicID),
+		"expires_at":   expiresAt,
+	})
+}
+
+// handleDownload redirects to a short-lived presigned MinIO URL that triggers a file download.
+// Expired tiles are cleaned up inline and return 403.
+func (s *Server) handleDownload(c echo.Context) error {
+	id := c.Param("id")
+	var objectName, url string
+	var expiresAt time.Time
+
+	err := s.DB.QueryRow(
+		"SELECT file_path, url, expires_at FROM tiles WHERE public_id=$1", id,
+	).Scan(&objectName, &url, &expiresAt)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "tile not found"})
+	}
+
+	if time.Now().After(expiresAt) {
+		if err := s.MinioClient.Delete(c.Request().Context(), objectName); err != nil {
+			log.Println("failed to delete expired tile:", err)
+		}
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "link expired"})
+	}
+
+	presignedURL, err := s.MinioClient.PresignDownload(c.Request().Context(), objectName, 5*time.Minute)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": fmt.Sprintf("failed to generate download link: %v", err),
+		})
+	}
+
+	return c.Redirect(http.StatusFound, presignedURL)
+}
+
+// handleStreamTile redirects to a presigned MinIO URL that supports HTTP range requests,
+// enabling PMTiles clients to fetch only the byte ranges they need.
+func (s *Server) handleStreamTile(c echo.Context) error {
+	id := c.Param("id")
+	var objectName string
+	var expiresAt time.Time
+
+	err := s.DB.QueryRow(
+		"SELECT file_path, expires_at FROM tiles WHERE public_id=$1", id,
+	).Scan(&objectName, &expiresAt)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "tile not found"})
+	}
+
+	if time.Now().After(expiresAt) {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "link expired"})
+	}
+
+	presignedURL, err := s.MinioClient.PresignGetObject(c.Request().Context(), objectName, 5*time.Minute)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": fmt.Sprintf("failed to generate access link: %v", err),
+		})
+	}
+
+	return c.Redirect(http.StatusFound, presignedURL)
+}
