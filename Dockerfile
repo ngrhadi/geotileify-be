@@ -1,25 +1,29 @@
-FROM golang:1.24-alpine
+FROM golang:1.24 AS builder
 
 WORKDIR /app
 
-# ogr2ogr (GDAL) for Shapefile → GeoJSON conversion
-RUN apk add --no-cache gdal-tools
-
-# DuckDB CLI for GeoParquet → GeoJSON conversion.
-# Static binary — no extra lib mounts needed.
-# Pin the version to keep builds reproducible; update as needed.
-ARG DUCKDB_VERSION=v1.2.2
-RUN apk add --no-cache wget unzip gcompat \
-    && wget -q -O /tmp/duckdb.zip \
-       https://github.com/duckdb/duckdb/releases/download/${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip \
-    && unzip /tmp/duckdb.zip -d /usr/local/bin \
-    && rm /tmp/duckdb.zip \
-    && chmod +x /usr/local/bin/duckdb \
-    && /usr/local/bin/duckdb -c "INSTALL spatial;"
-
 COPY . .
+
 RUN go mod download
-RUN go build -o geotileify ./cmd/geotileify
+RUN CGO_ENABLED=0 GOOS=linux go build -o geotileify ./cmd/geotileify
+
+
+# =========================
+# Runtime
+# =========================
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+# install only runtime deps
+RUN apt-get update && apt-get install -y \
+    gdal-bin \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# copy binary
+COPY --from=builder /app/geotileify .
 
 EXPOSE 9090
+
 CMD ["./geotileify"]
