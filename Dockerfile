@@ -9,7 +9,7 @@ RUN apk add --no-cache gdal-tools
 # Static binary — no extra lib mounts needed.
 # Pin the version to keep builds reproducible; update as needed.
 ARG DUCKDB_VERSION=v1.2.2
-RUN apk add --no-cache wget unzip \
+RUN apk add --no-cache wget unzip gcompat \
     && wget -q -O /tmp/duckdb.zip \
        https://github.com/duckdb/duckdb/releases/download/${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip \
     && unzip /tmp/duckdb.zip -d /usr/local/bin \
