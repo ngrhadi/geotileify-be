@@ -14,8 +14,9 @@ RUN apk add --no-cache wget unzip \
        https://github.com/duckdb/duckdb/releases/download/${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip \
     && unzip /tmp/duckdb.zip -d /usr/local/bin \
     && rm /tmp/duckdb.zip \
-    && chmod +x /usr/local/bin/duckdb \
-    && duckdb -c "INSTALL spatial;"
+    && chmod +x /usr/local/bin/duckdb
+
+RUN /usr/local/bin/duckdb -c "INSTALL spatial;"
 
 COPY . .
 RUN go mod download
