@@ -12,9 +12,6 @@ services:
     env_file:
       - .env
     volumes:
-      # --- tippecanoe ---
-      - /usr/local/bin/tippecanoe:/usr/local/bin/tippecanoe:ro
-
       # --- duckdb ---
       - /usr/local/bin/duckdb:/usr/local/bin/duckdb:ro
 
