@@ -30,7 +30,7 @@ func GeneratePMTiles(input, output string) error {
 // without requiring GDAL to be compiled with the Arrow driver.
 func ConvertParquetToGeoJSON(input, output string) error {
 	query := fmt.Sprintf(
-		`LOAD spatial; COPY (SELECT * FROM read_parquet('%s')) TO '%s' WITH (FORMAT GDAL, DRIVER 'GeoJSON');`,
+		`COPY (SELECT * FROM read_parquet('%s')) TO '%s' WITH (FORMAT GDAL, DRIVER 'GeoJSON');`,
 		input, output,
 	)
 	cmd := exec.Command("duckdb", "-c", query)
