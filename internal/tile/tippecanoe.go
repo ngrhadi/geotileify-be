@@ -29,13 +29,30 @@ func GeneratePMTiles(input, output string) error {
 // DuckDB is preferred over ogr2ogr because it includes native Parquet/Arrow support
 // without requiring GDAL to be compiled with the Arrow driver.
 func ConvertParquetToGeoJSON(input, output string) error {
-	query := fmt.Sprintf(
-		`COPY (SELECT * FROM read_parquet('%s')) TO '%s' WITH (FORMAT GDAL, DRIVER 'GeoJSON');`,
-		input, output,
-	)
+	query := fmt.Sprintf(`
+		LOAD spatial;
+
+		COPY (
+			SELECT json_object(
+				'type', 'FeatureCollection',
+				'features',
+				json_group_array(
+					json_object(
+						'type', 'Feature',
+						'geometry', ST_AsGeoJSON(geometry)::JSON,
+						'properties', json_object(* EXCLUDE (geometry))
+					)
+				)
+			)
+			FROM read_parquet('%s')
+		) TO '%s'
+		WITH (FORMAT JSON, ARRAY false);
+	`, input, output)
+
 	cmd := exec.Command("duckdb", "-c", query)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+
 	return cmd.Run()
 }
 
