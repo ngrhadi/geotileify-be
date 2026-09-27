@@ -1,14 +1,15 @@
-FROM golang:1.24-alpine
+FROM golang:1.24-bookworm
 
 WORKDIR /app
 
-RUN apk add --no-cache \
-    gdal-tools \
-    libc6-compat \
-    wget \
-    unzip
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        gdal-bin \
+        wget \
+        unzip \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install DuckDB CLI
+# DuckDB CLI
 RUN wget -q \
     https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip \
     -O /tmp/duckdb.zip \
@@ -16,6 +17,7 @@ RUN wget -q \
     && chmod +x /usr/local/bin/duckdb \
     && rm -f /tmp/duckdb.zip
 
+# Install DuckDB spatial extension during image build
 RUN duckdb -c "INSTALL spatial;"
 
 COPY . .
