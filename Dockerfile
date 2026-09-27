@@ -16,6 +16,8 @@ RUN wget -q \
     && chmod +x /usr/local/bin/duckdb \
     && rm -f /tmp/duckdb.zip
 
+RUN duckdb -c "INSTALL spatial;"
+
 COPY . .
 
 RUN go mod download
