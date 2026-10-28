@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — Geotileify</title>
+  <meta name="description" content="Geotileify privacy policy: what data is processed, how long uploads are retained, and how to contact the project." />
+  <meta name="theme-color" content="#171717" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
+  <link rel="stylesheet" href="/static/css/style.css?v=5" />
+  <link rel="icon" href="/static/icons/favicon.svg" type="image/svg+xml" />
+  <style>
+    .legal-page{padding:64px 0 96px}
+    .legal-head{max-width:760px;margin-bottom:36px}
+    .legal-head h1{font-size:clamp(36px,5vw,52px);line-height:1.05;letter-spacing:-.05em;margin:0 0 16px}
+    .legal-head .lede{max-width:640px;margin:0}
+    .legal-updated{margin:18px 0 0;color:var(--mute);letter-spacing:.08em}
+    .legal-layout{display:grid;grid-template-columns:210px minmax(0,1fr);gap:40px;align-items:start}
+    .legal-toc{position:sticky;top:96px;display:flex;flex-direction:column;gap:8px;padding-top:4px}
+    .legal-toc a{color:var(--body);text-decoration:none;font-size:13px;line-height:20px;
+      border-left:2px solid transparent;padding-left:12px;transition:color .15s,border-color .15s}
+    .legal-toc a:hover{color:var(--ink);border-color:var(--brand)}
+    .legal-card{background:#fff;border:1px solid var(--hairline);border-radius:12px;
+      padding:clamp(24px,4vw,48px);
+      box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.04)}
+    .legal-card h2{font-size:20px;line-height:28px;letter-spacing:-.6px;margin:36px 0 10px;
+      scroll-margin-top:96px}
+    .legal-card h2:first-child{margin-top:0}
+    .legal-card h3{font-size:16px;line-height:24px;letter-spacing:-.3px;margin:22px 0 8px}
+    .legal-card p,.legal-card li{color:var(--body);font-size:15px;line-height:1.7}
+    .legal-card p{margin:0 0 14px}
+    .legal-card ul{padding-left:20px;margin:0 0 18px}
+    .legal-card li{margin-bottom:7px}
+    .legal-card a{color:var(--brand-deep);text-decoration:underline;
+      text-decoration-thickness:1px;text-underline-offset:3px}
+    .legal-card a:hover{color:var(--brand-abyss)}
+    .legal-card strong{color:var(--ink);font-weight:600}
+    .legal-note{background:var(--brand-mist);border:1px solid var(--brand-soft);
+      border-radius:8px;padding:14px 16px;margin:20px 0}
+    .legal-note p{margin:0;font-size:13.5px}
+    @media (max-width:900px){
+      .legal-page{padding:40px 0 64px}
+      .legal-layout{grid-template-columns:1fr;gap:24px}
+      .legal-toc{position:static;flex-direction:row;flex-wrap:wrap;gap:8px;padding-top:0}
+      .legal-toc a{border-left:0;border:1px solid var(--hairline);border-radius:9999px;
+        padding:6px 10px;font-size:11px;background:#fff}
+      .legal-head{margin-bottom:24px}
+    }
+  </style>
+</head>
+<body id="top">
+  <header class="nav" id="siteNav">
+    <div class="container nav-inner">
+      <a class="skip-link" href="#main">Skip to content</a>
+      <a class="brand" href="/" aria-label="Geotileify home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span class="brand-word">Geotileify</span>
+        <span class="mono brand-version">v2.0.0</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="/#features">Features</a>
+        <a href="/#endpoints">API</a>
+        <a href="/privacy" class="is-active" aria-current="page">Privacy</a>
+      </nav>
+      <div class="nav-right">
+        <a class="btn btn-nav-cta" href="/">Back to home</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="legal-page">
+      <div class="container">
+        <div class="legal-head">
+          <p class="mono section-eyebrow">LEGAL</p>
+          <h1>Privacy Policy</h1>
+          <p class="lede">Geotileify converts geospatial files into streaming PMTiles. This page explains what data is processed when you use the website, API, and browser extension.</p>
+          <p class="mono legal-updated">LAST UPDATED · 28 OCTOBER 2026</p>
+        </div>
+
+        <div class="legal-layout">
+          <nav class="legal-toc" aria-label="On this page">
+            <a href="#data">Data we process</a>
+            <a href="#use">How we use data</a>
+            <a href="#retention">Storage &amp; retention</a>
+            <a href="#third-parties">Third parties</a>
+            <a href="#cookies">Cookies &amp; tracking</a>
+            <a href="#security">Security</a>
+            <a href="#deletion">Deletion &amp; your choices</a>
+            <a href="#contact">Contact</a>
+          </nav>
+
+          <article class="legal-card">
+            <p>This policy applies to the Geotileify landing page, the <code>/generate</code> API, and the Chrome extension. If you use a self-hosted Geotileify deployment, the operator of that deployment is responsible for its data practices.</p>
+
+            <h2 id="data">1. Data we process</h2>
+            <h3>Uploaded files</h3>
+            <p>When you submit a geospatial file, we receive its content, filename, size, and the format and tiling options you select. Uploaded files may contain personal data, for example property names, addresses, or coordinates. Only upload data you have the right to process.</p>
+            <h3>Generated output</h3>
+            <p>We generate a <code>.pmtiles</code> archive, a public ULID, and a short-lived signed download or streaming URL.</p>
+            <h3>Technical data</h3>
+            <p>Like most web services, we may process your IP address, request time, endpoint, user agent, status code, and error information for security, rate limiting, and operations.</p>
+            <h3>Browser extension</h3>
+            <p>The extension sends the file you choose to the Geotileify backend configured in the build. It does not include analytics or advertising trackers. The optional map preview loads base map tiles from Thunderforest.</p>
+
+            <h2 id="use">2. How we use data</h2>
+            <ul>
+              <li>Convert uploaded files and serve generated PMTiles or downloads.</li>
+              <li>Enforce upload limits and IP-based rate limits, and prevent abuse.</li>
+              <li>Debug failures and maintain the security and reliability of the service.</li>
+            </ul>
+            <p>We do not sell your data, use it for advertising, or build user profiles. The service does not require an account.</p>
+
+            <h2 id="retention">3. Storage and retention</h2>
+            <ul>
+              <li><strong>Tiles:</strong> uploaded files and generated archives are stored in S3-compatible object storage (MinIO) and expire after <strong>24 hours</strong>.</li>
+              <li><strong>Cleanup:</strong> a background job runs every <strong>15 minutes</strong> to delete expired objects and their PostgreSQL metadata rows.</li>
+              <li><strong>Signed URLs:</strong> download and streaming links are short-lived and expire after <strong>5 minutes</strong>.</li>
+              <li><strong>Temporary files:</strong> conversion workspaces are removed when the request finishes.</li>
+              <li><strong>Logs:</strong> operational logs may be retained according to the hosting provider's configuration.</li>
+            </ul>
+            <div class="legal-note">
+              <p>Because the service is ephemeral, a file may no longer be recoverable after its 24-hour window and cleanup pass.</p>
+            </div>
+
+            <h2 id="third-parties">4. Third-party services</h2>
+            <p>Depending on how you use Geotileify, requests may be sent to the following providers, which receive the technical data needed to serve the request under their own privacy policies:</p>
+            <ul>
+              <li><strong>Object storage (MinIO):</strong> stores uploaded and generated files.</li>
+              <li><strong>Thunderforest:</strong> serves base map tiles in the optional map preview.</li>
+              <li><strong>Google Fonts:</strong> serves the Geist and Geist Mono web fonts on the website.</li>
+              <li><strong>Chrome Web Store:</strong> distributes the browser extension.</li>
+              <li><strong>GitHub:</strong> hosts the source code and handles issues and support requests.</li>
+            </ul>
+
+            <h2 id="cookies">5. Cookies and tracking</h2>
+            <p>The landing page and API do not use advertising or analytics cookies. The extension does not include analytics or advertising trackers. Files downloaded through the extension are handled by Chrome's download manager.</p>
+
+            <h2 id="security">6. Security</h2>
+            <p>Geotileify uses signed URLs, access controls, upload size limits, rate limiting, and zip safety checks. Production deployments should serve traffic over HTTPS. No system is completely secure, so please do not upload sensitive personal data.</p>
+
+            <h2 id="deletion">7. Deletion and your choices</h2>
+            <p>Uploads expire automatically after 24 hours. To ask a privacy question or request deletion before expiry, open an issue at <a href="https://github.com/ngrhadi/geotileify-be/issues" target="_blank" rel="noopener noreferrer">github.com/ngrhadi/geotileify-be/issues</a>. Include the tile ID if you have it; we may need to verify the request. If you use a self-hosted deployment, contact that deployment's operator.</p>
+
+            <h2 id="children">8. Children</h2>
+            <p>The service is not directed to children under 13 (or the minimum age required in your jurisdiction). Do not upload children's personal data.</p>
+
+            <h2 id="changes">9. Changes to this policy</h2>
+            <p>We may update this policy from time to time. The “Last updated” date at the top of this page will change when we do. Material changes will be reflected on this page or in the project repository.</p>
+
+            <h2 id="contact">10. Contact</h2>
+            <p>Questions, deletion requests, or privacy concerns:</p>
+            <ul>
+              <li>Issues: <a href="https://github.com/ngrhadi/geotileify-be/issues" target="_blank" rel="noopener noreferrer">github.com/ngrhadi/geotileify-be/issues</a></li>
+              <li>Source: <a href="https://github.com/ngrhadi/geotileify-be" target="_blank" rel="noopener noreferrer">github.com/ngrhadi/geotileify-be</a></li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand-block">
+          <p class="footer-brand">
+            <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            <strong>Geotileify</strong>
+            <span class="mono footer-version">v2.0.0</span>
+          </p>
+          <p class="muted small footer-tag">Geospatial files → streaming PMTiles in seconds. Convert, host for 24 hours, and stream by byte range.</p>
+        </div>
+        <div class="footer-cols">
+          <nav class="footer-col" aria-label="Product">
+            <p class="mono footer-heading">PRODUCT</p>
+            <a href="/#features">Features</a>
+            <a href="/#formats">Supported formats</a>
+            <a href="/#endpoints">Chrome DevTools</a>
+          </nav>
+          <nav class="footer-col" aria-label="Developers">
+            <p class="mono footer-heading">DEVELOPERS</p>
+            <a href="/#endpoints">API reference</a>
+            <a href="/#endpoints"><code>POST /generate</code></a>
+            <a href="/#endpoints"><code>GET /tiles/:id</code></a>
+          </nav>
+          <nav class="footer-col" aria-label="Resources">
+            <p class="mono footer-heading">RESOURCES</p>
+            <a href="/health">System status</a>
+            <a href="/privacy" aria-current="page">Privacy policy</a>
+            <a href="https://github.com/ngrhadi/geotileify-be" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <span class="muted small footer-spec">TTL 24h · sweep /15m · max 50MB</span>
+          </nav>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p class="muted small">© 2026 Geotileify · Built with Tylertoo, DuckDB Spatial and MinIO.</p>
+        <a class="mono footer-top-link" href="#top">
+          Back to top
+          <img class="icon icon-inline" src="/static/icons/arrow-up.svg" alt="" width="13" height="13" />
+        </a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

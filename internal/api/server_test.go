@@ -1,7 +1,9 @@
 package api
 
 import (
+	"io/fs"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/labstack/echo/v4"
@@ -117,5 +119,28 @@ func TestParseTilingInputs(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("properties = %v, want %v", got, want)
 		}
+	}
+}
+
+func TestPrivacyRouteRegistered(t *testing.T) {
+	e := echo.New()
+	s := &Server{}
+	s.registerRoutes(e)
+
+	for _, route := range e.Routes() {
+		if route.Method == http.MethodGet && route.Path == "/privacy" {
+			return
+		}
+	}
+	t.Fatal("GET /privacy is not registered")
+}
+
+func TestPrivacyPageEmbedded(t *testing.T) {
+	data, err := fs.ReadFile(staticFS(), "privacy.html")
+	if err != nil {
+		t.Fatalf("privacy.html is not embedded: %v", err)
+	}
+	if !strings.Contains(string(data), "Privacy Policy") {
+		t.Fatal("privacy.html does not contain the policy title")
 	}
 }

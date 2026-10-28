@@ -105,14 +105,14 @@ func (s *Server) registerMiddleware(e *echo.Echo) {
 			// Landing page, static assets, health, dan tile streaming tidak
 			// kena rate-limit agar preview map/CSS/JS tidak dapat 429.
 			p := c.Path()
-			if p == "/" || p == "/health" || strings.HasPrefix(p, "/static") ||
-				strings.HasPrefix(p, "/tiles/") {
+			if p == "/" || p == "/health" || p == "/privacy" ||
+				strings.HasPrefix(p, "/static") || strings.HasPrefix(p, "/tiles/") {
 				return true
 			}
 			// c.Path() kosong saat 404 — fallback ke Request URL path.
 			rp := c.Request().URL.Path
-			if rp == "/" || rp == "/health" || strings.HasPrefix(rp, "/static/") ||
-				strings.HasPrefix(rp, "/tiles/") {
+			if rp == "/" || rp == "/health" || rp == "/privacy" ||
+				strings.HasPrefix(rp, "/static/") || strings.HasPrefix(rp, "/tiles/") {
 				return true
 			}
 			return false
@@ -139,8 +139,9 @@ func (s *Server) registerMiddleware(e *echo.Echo) {
 }
 
 func (s *Server) registerRoutes(e *echo.Echo) {
-	// Landing page: render web/static/index.html (embed.FS, with proper CSS/JS via /static/*).
+	// Landing page and legal pages from web/static (embedded at build time).
 	e.GET("/", s.handleIndex)
+	e.GET("/privacy", s.handlePrivacy)
 	// Static assets (css/js): correct Content-Type + long cache (immutable files).
 	e.GET("/static/*", s.handleStatic)
 
@@ -166,11 +167,20 @@ func staticFS() fs.FS {
 // Uses text/html; charset=utf-8 explicitly and no-store so deploys baru
 // langsung terlihat (HTML tidak di-cache, asset css/js yang di-cache).
 func (s *Server) handleIndex(c echo.Context) error {
-	html, err := fs.ReadFile(staticFS(), "index.html")
+	return s.serveEmbeddedPage(c, "index.html")
+}
+
+// handlePrivacy serves the embedded privacy policy page.
+func (s *Server) handlePrivacy(c echo.Context) error {
+	return s.serveEmbeddedPage(c, "privacy.html")
+}
+
+// serveEmbeddedPage serves a standalone HTML page with no-store caching.
+func (s *Server) serveEmbeddedPage(c echo.Context, name string) error {
+	html, err := fs.ReadFile(staticFS(), name)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "landing page not found"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "page not found"})
 	}
-	// Cegah echo sniffing tipe lain: set eksplisit.
 	c.Response().Header().Set(echo.HeaderContentType, "text/html; charset=utf-8")
 	c.Response().Header().Set(echo.HeaderCacheControl, "no-store")
 	return c.Blob(http.StatusOK, "text/html; charset=utf-8", html)

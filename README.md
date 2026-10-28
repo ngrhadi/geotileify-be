@@ -5,7 +5,7 @@ A Go REST API that accepts geospatial file uploads, converts them to [PMTiles](h
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Chrome Web Store](https://img.shields.io/badge/Chrome%20Extension-Install-blue?logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/geotileify/ljoijfpcddgiadohecobajkkbbemmaio)
 
-→ [Contributing Guide](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Agent Guide](AGENT.md)
+→ [Contributing Guide](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Agent Guide](AGENT.md) · [Privacy Policy](https://geotileify.idn-guessr.com/privacy)
 
 ---
 
@@ -62,6 +62,7 @@ with DuckDB Spatial, then generates PMTiles with **tylertoo**. There is no fallb
 **Endpoints:**
 
 - `GET /` — serves the embedded landing page (`web/static/index.html`)
+- `GET /privacy` — serves the embedded privacy policy (`web/static/privacy.html`)
 - `GET /health` — service status
 - `POST /generate` — upload + normalise + tile generation
 - `GET /download/:id` — presigned MinIO URL (triggers file download)

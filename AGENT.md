@@ -79,6 +79,7 @@ utils/generate-ulid.go        Monotonic ULID generator (26 chars)
 
 web/embed.go                  //go:embed static — embeds the landing page
 web/static/index.html         Landing page (no template engine)
+web/static/privacy.html       Privacy policy (standalone embedded page)
 web/static/css/style.css      All page styles + design tokens
 web/static/js/app.js          Health probe, nav, scroll-spy, hero canvas, reveal
 web/static/icons/*.svg        Lucide icons + favicon, served as separate files
@@ -131,6 +132,7 @@ metadata after tiling (`internal/tile/pmtiles_metadata.go`).
 | Method | Path            | Purpose |
 | ------ | --------------- | ------- |
 | GET    | `/`             | Embedded landing page (`no-store`). |
+| GET    | `/privacy`      | Embedded privacy policy page (`no-store`). |
 | GET    | `/static/*`     | Embedded CSS/JS/icons. Long cache for CSS/JS. |
 | GET    | `/health`       | Liveness probe: `{"status":"ok", ...}`. |
 | POST   | `/generate`     | Upload + convert + store. Fields: `file`, `min_zoom`, `max_zoom`, `simplify_factor`, `exclude_all_properties`, `include_properties`, `name`, `description`, `attribution`. |
@@ -245,6 +247,7 @@ directly; `web/embed.go` embeds them at compile time.
 ### Serving contract
 
 - `internal/api/server.go` serves `index.html` at `/` with `Cache-Control: no-store`.
+- `/privacy` serves `privacy.html` from the same embedded FS, also with `no-store`.
 - `/static/*` reads from the embedded FS, sets MIME by extension, blocks `..`,
   and caches CSS/JS for 24 h, other assets for 1 h.
 - Because CSS/JS are cached for a day, bump a query string / asset path when
@@ -393,7 +396,7 @@ Registered in `internal/api/server.go`:
 - **CORS** allowlist: two Chrome extension IDs + `https://geotileify.idn-guessr.com`.
 - Request logger.
 - **Rate limit**: 10 rps, burst 30, per `RealIP`, 3-minute window. Skipped for
-  `/`, `/health`, `/static/*`, and `/tiles/*` (map range requests).
+  `/`, `/health`, `/privacy`, `/static/*`, and `/tiles/*` (map range requests).
 - **Body limit**: 50 MB (`middleware.BodyLimit`), plus a handler-level size check.
 - Static handler: `path.Clean` + `..` rejection + `X-Content-Type-Options: nosniff`.
 - Zip ingestion: allowlist, size caps, zip-slip guard.
