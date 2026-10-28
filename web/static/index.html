@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Geotileify — Turn geospatial files into streaming tiles.</title>
+  <meta name="description" content="Geotileify converts GeoJSON, GeoParquet and Shapefile archives into PMTiles that stream over HTTP range requests. Fast, single-file output, auto-expires in 24 hours." />
+  <meta name="theme-color" content="#171717" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
+  <link rel="stylesheet" href="/static/css/style.css?v=5" />
+  <!-- Favicon: same 4-tile mark as the header/footer brand mark -->
+  <link rel="icon" href="/static/icons/favicon.svg" type="image/svg+xml" />
+</head>
+<body id="top">
+  <!-- ══ HEADER ══ -->
+  <div class="announce">
+    <div class="container announce-inner">
+      <span class="mono announce-tag">v2.0.0</span>
+      <span class="announce-text">Geotileify for Chrome DevTools — inspect any PMTiles URL in one click.</span>
+      <a class="announce-link" href="https://chromewebstore.google.com/detail/ljoijfpcddgiadohecobajkkbbemmaio?utm_source=item-share-cb" target="_blank" rel="noopener">
+        Get the extension
+        <!-- lucide: arrow-right -->
+        <img class="icon icon-inline" src="/static/icons/arrow-right.svg" alt="" width="13" height="13" />
+      </a>
+    </div>
+  </div>
+  <header class="nav" id="siteNav">
+    <div class="container nav-inner">
+      <a class="skip-link" href="#main">Skip to content</a>
+      <a class="brand" href="#top" aria-label="Geotileify home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span class="brand-word">Geotileify</span>
+        <span class="mono brand-version">v2.0.0</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#features" data-spy="features">Features</a>
+        <a href="#endpoints" data-spy="endpoints">Endpoints</a>
+        <a href="#formats" data-spy="formats">Formats</a>
+      </nav>
+      <div class="nav-right">
+        <a class="status-pill" id="healthBadge" href="/health" role="status" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <!-- lucide: activity -->
+          <img class="icon icon-inline" src="/static/icons/activity.svg" alt="" width="13" height="13" />
+          <span id="healthText">Checking…</span>
+        </a>
+        <a class="btn btn-nav-cta" href="https://chromewebstore.google.com/detail/ljoijfpcddgiadohecobajkkbbemmaio?utm_source=item-share-cb" target="_blank" rel="noopener">
+          <!-- lucide: download -->
+          <img class="icon icon-on-dark" src="/static/icons/download.svg" alt="" width="14" height="14" />
+          <span>Get extension</span>
+        </a>
+        <button id="menuBtn" class="menu-btn" aria-expanded="false" aria-controls="mobileMenu" aria-label="Open menu">
+          <!-- lucide: menu -->
+          <img class="icon" src="/static/icons/menu.svg" alt="" width="20" height="20" />
+        </button>
+      </div>
+    </div>
+    <nav id="mobileMenu" class="mobile-menu" aria-label="Mobile" hidden>
+      <a href="#features">Features</a>
+      <a href="#endpoints">Endpoints</a>
+      <a href="#formats">Formats</a>
+      <a href="/health">System status</a>
+      <a class="mobile-cta" href="https://chromewebstore.google.com/detail/ljoijfpcddgiadohecobajkkbbemmaio?utm_source=item-share-cb" target="_blank" rel="noopener">Get extension</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <!-- ══ HERO · full-bleed dark stage with a uniform tile field ══ -->
+    <section class="hero" aria-label="Introduction">
+      <div class="hero-card">
+        <canvas id="tileCanvas" class="tile-canvas" aria-hidden="true"></canvas>
+        <div class="hero-scrim" aria-hidden="true"></div>
+        <div class="hero-inner">
+          <div class="hero-copy">
+            <p class="eyebrow eyebrow-dark">
+              <span class="eyebrow-dot" aria-hidden="true"></span>
+              <span class="mono">GEOTILEIFY&nbsp;&nbsp;·&nbsp;&nbsp;GEOSPATIAL → PMTILES</span>
+            </p>
+            <h1>Turn geospatial files into <span class="accent">streaming tiles.</span></h1>
+            <p class="lede">Upload once, stream everywhere. Geotileify converts vector data into a single <code>.pmtiles</code> archive served over HTTP range requests — ready for MapLibre and Leaflet. Links expire automatically after 24 hours.</p>
+            <div class="hero-cta">
+              <a class="btn btn-hero-primary" href="https://chromewebstore.google.com/detail/ljoijfpcddgiadohecobajkkbbemmaio?utm_source=item-share-cb" target="_blank" rel="noopener">
+                <!-- lucide: download -->
+                <img class="icon icon-on-dark" src="/static/icons/download.svg" alt="" width="16" height="16" />
+                Download Chrome DevTools
+              </a>
+              <a class="btn btn-hero-ghost" href="#endpoints">
+                <!-- lucide: book-open -->
+                <img class="icon icon-on-dark" src="/static/icons/book-open.svg" alt="" width="16" height="16" />
+                API reference
+              </a>
+            </div>
+            <p class="hero-meta mono">PMTILES&nbsp;&nbsp;·&nbsp;&nbsp;RANGE-READY&nbsp;&nbsp;·&nbsp;&nbsp;24H TTL&nbsp;&nbsp;·&nbsp;&nbsp;50MB MAX</p>
+          </div>
+          <aside class="hero-rail mono" aria-hidden="true">
+            <span class="hero-rail-line"></span>
+            <span class="hero-rail-step"><b>01</b> upload</span>
+            <span class="hero-rail-step"><b>02</b> tylertoo</span>
+            <span class="hero-rail-step"><b>03</b> stream</span>
+            <span class="hero-rail-note">206 · partial content</span>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- FORMAT STRIP · DESIGN.md `logo-strip` -->
+    <section id="formats" class="container strip">
+      <p class="mono strip-label">SUPPORTED INPUT FORMATS</p>
+      <ul class="format-list">
+        <li><code>.geojson</code></li>
+        <li><code>.json</code></li>
+        <li><code>.geojsonl</code></li>
+        <li><code>.fgb</code></li>
+        <li><code>.parquet</code></li>
+        <li><code>.zip</code><span class="muted">shapefile bundle</span></li>
+      </ul>
+    </section>
+
+    <!-- FEATURES · DESIGN.md `feature-mesh-band` + `card-marketing` -->
+    <section id="features" class="band">
+      <div class="container">
+        <p class="mono section-eyebrow">WHY GEOTILEIFY</p>
+        <h2>One file. Infinite zoom. Zero tile server.</h2>
+        <p class="section-sub">Everything is computed once with Tylertoo and DuckDB Spatial, stored on S3-compatible object storage, and streamed by byte range.</p>
+        <div class="cards">
+          <article class="card">
+            <!-- lucide: zap -->
+            <img class="icon icon-card" src="/static/icons/zap.svg" alt="" width="22" height="22" />
+            <h3>Convert in seconds.</h3>
+            <p>Send a GeoJSON, FlatGeobuf, GeoParquet, or zipped Shapefile to <code>/generate</code> and get back a single <code>.pmtiles</code> archive with a signed download URL.</p>
+            <p class="mono card-meta">TYLERTOO · DUCKDB SPATIAL</p>
+          </article>
+          <article class="card">
+            <!-- lucide: layers -->
+            <img class="icon icon-card" src="/static/icons/layers.svg" alt="" width="22" height="22" />
+            <h3>Stream by byte range.</h3>
+            <p>Clients fetch only the tiles they need through <code>/tiles/:id</code>. Plug the URL straight into MapLibre GL JS via <code>pmtiles://</code>.</p>
+            <p class="mono card-meta">HTTP RANGE · MAPLIBRE READY</p>
+          </article>
+          <article class="card">
+            <!-- lucide: clock-3 -->
+            <img class="icon icon-card" src="/static/icons/clock-3.svg" alt="" width="22" height="22" />
+            <h3>Expire by design.</h3>
+            <p>Every tile carries a 24-hour TTL. Expired archives are swept automatically every 15 minutes — no stale data, no manual cleanup.</p>
+            <p class="mono card-meta">24H TTL · AUTO SWEEP</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ENDPOINTS · DESIGN.md `showcase-band-dark` (polarity flip) -->
+    <section id="endpoints" class="band band-dark">
+      <div class="container">
+        <p class="mono section-eyebrow on-dark">API REFERENCE</p>
+        <h2 class="on-dark">Four endpoints. That is the whole surface.</h2>
+        <p class="section-sub on-dark-muted">Integrate from any client — browser extension, notebook, or edge worker. Uploads are <code>multipart/form-data</code> under the <code>file</code> field.</p>
+        <div class="endpoint-grid">
+          <article class="endpoint">
+            <div class="endpoint-head">
+              <!-- lucide: activity -->
+              <img class="icon icon-inline" src="/static/icons/activity.svg" alt="" width="15" height="15" />
+              <p class="mono method method-get">GET</p>
+              <code>/health</code>
+            </div>
+            <p>Service status probe. Used by the badge in the navigation bar above.</p>
+          </article>
+          <article class="endpoint">
+            <div class="endpoint-head">
+              <!-- lucide: zap -->
+              <img class="icon icon-inline" src="/static/icons/zap.svg" alt="" width="15" height="15" />
+              <p class="mono method method-post">POST</p>
+              <code>/generate</code>
+            </div>
+            <p>Accepts one geospatial file, returns <code>id</code>, <code>download_url</code>, and <code>expires_at</code>.</p>
+          </article>
+          <article class="endpoint">
+            <div class="endpoint-head">
+              <!-- lucide: database -->
+              <img class="icon icon-inline" src="/static/icons/database.svg" alt="" width="15" height="15" />
+              <p class="mono method method-get">GET</p>
+              <code>/download/:id</code>
+            </div>
+            <p>Redirects to a 5-minute signed URL that forces a file download.</p>
+          </article>
+          <article class="endpoint">
+            <div class="endpoint-head">
+              <!-- lucide: earth -->
+              <img class="icon icon-inline" src="/static/icons/earth.svg" alt="" width="15" height="15" />
+              <p class="mono method method-get">GET</p>
+              <code>/tiles/:id</code>
+            </div>
+            <p>Redirects to a 5-minute signed URL with range support for live map streaming.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ FOOTER ══ -->
+    <footer class="footer">
+      <div class="container">
+        <div class="footer-top">
+          <div class="footer-brand-block">
+            <p class="footer-brand">
+              <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+              <strong>Geotileify</strong>
+              <span class="mono footer-version">v2.0.0</span>
+            </p>
+            <p class="muted small footer-tag">Geospatial files → streaming PMTiles in seconds. Convert, host for 24 hours, and stream by byte range.</p>
+            <a class="mono footer-status" id="footerHealthWrap" href="/health">
+              <span class="status-dot" aria-hidden="true"></span>
+              <!-- lucide: activity -->
+              <img class="icon icon-inline" src="/static/icons/activity.svg" alt="" width="13" height="13" />
+              <span id="footerHealth">Checking status…</span>
+            </a>
+          </div>
+          <div class="footer-cols">
+            <nav class="footer-col" aria-label="Product">
+              <p class="mono footer-heading">PRODUCT</p>
+              <a href="#features">Features</a>
+              <a href="#formats">Supported formats</a>
+              <a href="#endpoints">Chrome DevTools</a>
+            </nav>
+            <nav class="footer-col" aria-label="Developers">
+              <p class="mono footer-heading">DEVELOPERS</p>
+              <a href="#endpoints">API reference</a>
+              <a href="#endpoints"><code>POST /generate</code></a>
+              <a href="#endpoints"><code>GET /tiles/:id</code></a>
+            </nav>
+            <nav class="footer-col" aria-label="Resources">
+              <p class="mono footer-heading">RESOURCES</p>
+              <a href="/health">System status</a>
+              <a href="/health"><code>GET /health</code></a>
+              <span class="muted small footer-spec">TTL 24h · sweep /15m · max 50MB</span>
+            </nav>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <p class="muted small">© 2026 Geotileify · Built with Tylertoo, DuckDB Spatial and MinIO.</p>
+          <a class="mono footer-top-link" href="#top">
+            Back to top
+            <!-- lucide: arrow-up -->
+            <img class="icon icon-inline" src="/static/icons/arrow-up.svg" alt="" width="13" height="13" />
+          </a>
+        </div>
+      </div>
+    </footer>
+  </main>
+
+  <script src="/static/js/app.js?v=7" defer></script>
+</body>
+</html>

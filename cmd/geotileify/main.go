@@ -9,6 +9,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/ngrhadi/geotileify-be/internal/api"
 	"github.com/ngrhadi/geotileify-be/internal/storage"
+	"github.com/ngrhadi/geotileify-be/internal/tile"
 )
 
 func main() {
@@ -22,6 +23,10 @@ func main() {
 		log.Fatal("db connection failed:", err)
 	}
 	log.Println("DB connected")
+
+	if err := tile.CheckDependencies(); err != nil {
+		log.Fatal("missing tiling dependency: ", err)
+	}
 
 	minioClient := storage.New(
 		os.Getenv("MINIO_ENDPOINT"),

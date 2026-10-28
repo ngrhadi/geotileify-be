@@ -10,9 +10,8 @@ Install these tools before starting:
 |------|---------|---------|
 | Go 1.24+ | Runtime | https://go.dev/dl |
 | Docker & Docker Compose | Local stack | https://docs.docker.com/get-docker |
-| tippecanoe | GeoJSON → PMTiles | `brew install tippecanoe` (macOS) |
-| GDAL (`ogr2ogr`) | Shapefile → GeoJSON | `brew install gdal` (macOS) |
-| duckdb | GeoParquet → GeoJSON | `brew install duckdb` (macOS) |
+| duckdb | GeoJSON/FlatGeobuf/Shapefile → GeoParquet | `brew install duckdb` (macOS) |
+| tylertoo | GeoParquet → PMTiles | `cargo install tylertoo` |
 
 After installing duckdb, install the spatial extension once:
 
@@ -49,7 +48,7 @@ The API will be available at `http://localhost:9090`.
 cmd/geotileify/     Entry point — wires server, scheduler, and worker
 internal/api/       Echo HTTP handlers and middleware
 internal/storage/   MinIO client wrapper
-internal/tile/      tippecanoe, ogr2ogr, and duckdb wrappers
+internal/tile/      duckdb conversion + tylertoo tiling + shapefile safety
 internal/tasks/     Asynq background job for cleanup
 migrations/         SQL migration files
 utils/              ULID generation helper
@@ -83,7 +82,13 @@ Run `gofmt` before committing:
 gofmt -w .
 ```
 
-No test suite exists yet — manual testing via the API endpoints is the current approach.
+Run the conversion integration tests before opening a PR:
+
+```bash
+go test ./...
+```
+
+The `internal/tile` tests skip automatically when `duckdb` or `tylertoo` is not installed.
 
 ## Submitting a Pull Request
 
@@ -97,12 +102,12 @@ No test suite exists yet — manual testing via the API endpoints is the current
 
 ## Adding a New File Format
 
-The conversion pipeline lives in `internal/tile/tippecanoe.go`. To support a new format:
+The conversion pipeline lives in `internal/tile/tylertoo.go` and `internal/tile/shapefile.go`. To support a new format:
 
-1. Add the file extension to the format detection logic.
-2. Implement the conversion function (follow the pattern of existing ones like `convertParquet` or `convertShapefile`).
-3. Call the new function from the main `Generate` handler in `internal/api/server.go`.
-4. Update the supported formats table in `README.md`.
+1. Add the file extension to the allowlist and switch in `internal/api/server.go`.
+2. Add the DuckDB `ST_Read` → GeoParquet path in `internal/tile/tylertoo.go` (or reuse `ConvertToGeoParquet`).
+3. Add an integration fixture in `internal/tile/tylertoo_test.go`.
+4. Update the supported formats tables in `README.md` and `AGENT.md`.
 
 ## Adding a Database Migration
 

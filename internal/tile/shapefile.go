@@ -5,43 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
 
-// GeneratePMTiles converts a GeoJSON/GeoJSONSeq/FlatGeobuf file to PMTiles using tippecanoe.
-// Zoom levels are chosen automatically (-zg) and feature IDs are generated if absent.
-func GeneratePMTiles(input, output string) error {
-	cmd := exec.Command("tippecanoe",
-		"-o", output,
-		"-zg",
-		"--force",
-		"--generate-ids",
-		input,
-	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-// ConvertParquetToGeoJSON converts a GeoParquet file to GeoJSON using DuckDB.
-// DuckDB is preferred over ogr2ogr because it includes native Parquet/Arrow support
-// without requiring GDAL to be compiled with the Arrow driver.
-func ConvertParquetToGeoJSON(input, output string) error {
-	query := fmt.Sprintf(
-		`LOAD spatial; COPY (SELECT * FROM read_parquet('%s')) TO '%s' WITH (FORMAT GDAL, DRIVER 'GeoJSON');`,
-		input, output,
-	)
-	cmd := exec.Command("duckdb", "-c", query)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-// ConvertShapefileZipToGeoJSON validates a zip archive as a safe Shapefile bundle,
-// extracts it, and converts the .shp to GeoJSON via ogr2ogr.
-func ConvertShapefileZipToGeoJSON(zipPath, output string) error {
+// ConvertShapefileZipToGeoParquet validates a zipped Shapefile bundle, extracts
+// it safely, then converts the first .shp to WGS84 GeoParquet via DuckDB.
+func ConvertShapefileZipToGeoParquet(zipPath, output string) error {
 	extractDir := zipPath + "_extracted"
 	shpPath, err := validateAndExtractShapefileZip(zipPath, extractDir)
 	if err != nil {
@@ -49,14 +19,11 @@ func ConvertShapefileZipToGeoJSON(zipPath, output string) error {
 	}
 	defer os.RemoveAll(extractDir)
 
-	cmd := exec.Command("ogr2ogr", "-f", "GeoJSON", output, shpPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return ConvertToGeoParquet(shpPath, output)
 }
 
-// shapefileAllowedExts is the whitelist of file extensions permitted inside a shapefile zip.
-// Anything outside this list is rejected as potentially unsafe.
+// shapefileAllowedExts is the whitelist of file extensions permitted inside a
+// shapefile zip. Anything outside this list is rejected as potentially unsafe.
 var shapefileAllowedExts = map[string]bool{
 	".shp": true, // geometry
 	".dbf": true, // attributes
@@ -76,8 +43,8 @@ const (
 	maxExtractBytes = 200 * 1024 * 1024 // 200 MB — guards against zip bombs
 )
 
-// validateAndExtractShapefileZip opens the zip, validates its contents, extracts to destDir,
-// and returns the path to the .shp file.
+// validateAndExtractShapefileZip opens the zip, validates its contents, extracts
+// to destDir, and returns the path to the .shp file.
 func validateAndExtractShapefileZip(zipPath, destDir string) (string, error) {
 	r, err := zip.OpenReader(zipPath)
 	if err != nil {
@@ -91,7 +58,7 @@ func validateAndExtractShapefileZip(zipPath, destDir string) (string, error) {
 	}
 
 	var (
-		totalSize        uint64
+		totalSize              uint64
 		hasShp, hasDbf, hasShx bool
 	)
 

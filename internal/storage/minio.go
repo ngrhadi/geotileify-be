@@ -75,3 +75,26 @@ func (c *Client) PresignGetObject(ctx context.Context, objectName string, expiry
 	}
 	return u.String(), nil
 }
+
+// StatObject returns object metadata without downloading the body.
+func (c *Client) StatObject(ctx context.Context, objectName string) (minio.ObjectInfo, error) {
+	info, err := c.Client.StatObject(ctx, c.Bucket, objectName, minio.StatObjectOptions{})
+	if err != nil {
+		return minio.ObjectInfo{}, fmt.Errorf("stat %s: %w", objectName, err)
+	}
+	return info, nil
+}
+
+// OpenObjectRange returns a reader for the inclusive byte range [start, end].
+// The caller must close the returned object.
+func (c *Client) OpenObjectRange(ctx context.Context, objectName string, start, end int64) (*minio.Object, error) {
+	opts := minio.GetObjectOptions{}
+	if err := opts.SetRange(start, end); err != nil {
+		return nil, fmt.Errorf("range %d-%d for %s: %w", start, end, objectName, err)
+	}
+	obj, err := c.Client.GetObject(ctx, c.Bucket, objectName, opts)
+	if err != nil {
+		return nil, fmt.Errorf("get %s: %w", objectName, err)
+	}
+	return obj, nil
+}

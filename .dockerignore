@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+tmp
+*.zip
+dump.rdb
+.DS_Store
+playwright-report
+test-results
